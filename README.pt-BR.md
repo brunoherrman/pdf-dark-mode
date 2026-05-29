@@ -1,49 +1,54 @@
 [English](./README.md) | [Português (Brasil)](./README.pt-BR.md)
 
+<div align="center">
+
 # PDF Dark Mode
 
-Leitor de PDF em modo escuro, totalmente no navegador, com marcações, comentários em texto, busca, zoom, cópia de print e exportação do PDF anotado.
+Leitor de PDF em modo escuro com marcações, comentários, busca, zoom, cópia de print e exportação do PDF anotado — tudo no navegador.
 
-## Acesso Rápido
+![Status](https://img.shields.io/badge/status-active-2ea44f?style=for-the-badge)
+![Licença](https://img.shields.io/badge/license-MIT-2563eb?style=for-the-badge)
+![Feito com](https://img.shields.io/badge/made%20with-Vanilla%20JS-f7df1e?style=for-the-badge)
+![Client-side](https://img.shields.io/badge/runtime-browser-111827?style=for-the-badge)
 
-- [Abrir `index.html` no GitHub](./index.html)
-- [Baixar `index.html`](https://github.com/brunoherrman/pdf-dark-mode/raw/main/index.html)
+[Baixar `index.html`](https://github.com/brunoherrman/pdf-dark-mode/raw/main/index.html) • [Abrir arquivo no repositório](./index.html) • [English](./README.md)
+
+</div>
 
 ## Visão Geral
 
-PDF Dark Mode é um leitor leve, client-side, feito para leitura confortável por longos períodos. Você pode abrir um PDF localmente, alternar entre presets escuros, navegar com rapidez, destacar conteúdo, adicionar comentários formatados e exportar o arquivo anotado sem backend.
+PDF Dark Mode é um leitor leve, client-side, pensado para leitura confortável por longos períodos. Ele abre PDFs locais, aplica presets escuros, suporta anotações e comentários em texto com estilo, e exporta o arquivo anotado sem depender de backend.
 
-## Recursos
+## Por Que Ele Se Destaca
 
-- Presets de leitura escura: `Warm`, `Classic` e `Blue`
-- Busca com destaque claro do resultado atual
-- Navegação estável por páginas, miniaturas e atalho numérico
-- Marcações por seleção de texto e por caixa
-- Comentários em texto com clique na página, tamanho, negrito e itálico
-- Desfazer e refazer com `Ctrl + Z` / `Ctrl + Y`
-- Cópia da página atual como imagem
-- Exportação local do PDF anotado
-- Cor personalizada de anotação persistida em `localStorage`
+- Totalmente client-side: sem servidor obrigatório
+- Presets escuros para diferentes preferências visuais
+- Fluxo rápido para marcação, caixa e comentário em texto
+- Busca com destaque visível do resultado atual
+- Desfazer e refazer para editar anotações com mais segurança
 
-## Stack
+## Tabela de Recursos
 
-- HTML
-- CSS
-- JavaScript vanilla
-- [PDF.js](https://mozilla.github.io/pdf.js/)
-- [PDF-lib](https://pdf-lib.js.org/)
+| Recurso | Detalhes |
+|---|---|
+| Presets escuros | `Warm`, `Classic`, `Blue` |
+| Navegação | Miniaturas, ir para página, zoom, ajustar largura, `100%` |
+| Anotações | Marcação de texto, caixa e comentários em texto |
+| Busca | Navegação entre ocorrências com foco visual no resultado atual |
+| Exportação | Salvar PDF anotado localmente ou baixar cópia com timestamp |
+| Utilitários | Copiar página atual como imagem, persistência local via `localStorage` |
 
-## Executando Localmente
+## Início Rápido
 
-### Opção 1: abrir direto
+### Opção 1: Abrir direto
 
-Abra o `index.html` diretamente no navegador.
+Abra o `index.html` no navegador.
 
 Observações:
-- algumas APIs do navegador podem ficar limitadas em `file://`
-- `Salvar como` funciona melhor quando servido em `localhost`
+- algumas APIs do navegador ficam limitadas em `file://`
+- `Salvar como` funciona melhor quando servido por `localhost`
 
-### Opção 2: servidor local recomendado
+### Opção 2: Servidor local recomendado
 
 ```bash
 python -m http.server 5500
@@ -78,7 +83,15 @@ http://localhost:5500
 ### Salvar PDF anotado
 
 - `Salvar como`: tenta abrir o seletor do sistema para escolher pasta e nome do arquivo
-- `Download PDF`: baixa uma cópia com timestamp no nome
+- `Download PDF`: baixa uma cópia com data e hora no nome
+
+## Stack
+
+- HTML
+- CSS
+- JavaScript vanilla
+- [PDF.js](https://mozilla.github.io/pdf.js/)
+- [PDF-lib](https://pdf-lib.js.org/)
 
 ## Privacidade
 
@@ -88,16 +101,22 @@ http://localhost:5500
 
 ## Notas de Segurança
 
-- não foram encontrados tokens, segredos, chaves privadas ou credenciais no repositório local durante a revisão
+- não foram encontrados tokens, segredos, chaves privadas ou credenciais no repositório durante a revisão
 - o projeto depende atualmente de CDNs públicos para `pdf.js` e `pdf-lib`
-- para cenários mais rígidos de produção, vale considerar versionar esses assets localmente e adicionar controles de integridade quando possível
+- para uso mais rígido em produção, vale considerar versionar esses assets localmente e aplicar controles de integridade quando possível
 
-## Arquivos do Repositório
+## Limitações Conhecidas
+
+- `Salvar como` depende do suporte do navegador ao File System Access API
+- uso direto por `file://` pode limitar algumas capacidades do navegador
+- os CDNs são necessários, a menos que as bibliotecas sejam empacotadas localmente
+
+## Estrutura do Repositório
 
 - `index.html`: aplicação completa
 - `README.md`: documentação em inglês
 - `README.pt-BR.md`: documentação em português do Brasil
-- `.gitignore`: exclusões para publicação pública
+- `.gitignore`: exclusões para repositório público
 - `LICENSE`: licença do projeto
 
 ## Descrição Recomendada Para o GitHub

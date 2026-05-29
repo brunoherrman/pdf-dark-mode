@@ -1,49 +1,54 @@
 [English](./README.md) | [Português (Brasil)](./README.pt-BR.md)
 
+<div align="center">
+
 # PDF Dark Mode
 
-Dark-mode PDF reader that runs entirely in the browser, with highlights, text comments, search, zoom, print copy, and annotated PDF export.
+Dark-mode PDF reader with highlights, comments, search, zoom, print copy, and annotated PDF export — fully client-side.
 
-## Quick Access
+![Status](https://img.shields.io/badge/status-active-2ea44f?style=for-the-badge)
+![License](https://img.shields.io/badge/license-MIT-2563eb?style=for-the-badge)
+![Made with](https://img.shields.io/badge/made%20with-Vanilla%20JS-f7df1e?style=for-the-badge)
+![Client-side](https://img.shields.io/badge/runtime-browser-111827?style=for-the-badge)
 
-- [Open `index.html` on GitHub](./index.html)
-- [Download `index.html`](https://github.com/brunoherrman/pdf-dark-mode/raw/main/index.html)
+[Download `index.html`](https://github.com/brunoherrman/pdf-dark-mode/raw/main/index.html) • [Open repository file](./index.html) • [Português (Brasil)](./README.pt-BR.md)
+
+</div>
 
 ## Overview
 
-PDF Dark Mode is a lightweight client-side reader built for comfortable long-form reading. It lets you open a PDF locally, switch between dark presets, navigate quickly, highlight content, add styled comments, and export the annotated file without a backend.
+PDF Dark Mode is a lightweight browser-based reader built for comfortable long reading sessions. It opens local PDFs, applies dark presets, supports annotations and styled text comments, and exports the annotated file without any backend.
 
-## Features
+## Why It Stands Out
 
-- Dark reading presets: `Warm`, `Classic`, and `Blue`
+- Entirely client-side: no server required
+- Dark reading presets designed for different visual preferences
+- Fast workflow for highlight, box annotation, and text comments
 - Search with visible current-match emphasis
-- Stable page navigation, thumbnails, and page jump
-- Text highlight and box highlight tools
-- Click-to-place text comments with size, bold, and italic styles
-- Undo and redo with `Ctrl + Z` / `Ctrl + Y`
-- Copy the current page as an image
-- Export annotated PDF locally
-- Custom annotation color persisted in `localStorage`
+- Undo and redo support for safer annotation editing
 
-## Tech Stack
+## Feature Matrix
 
-- HTML
-- CSS
-- Vanilla JavaScript
-- [PDF.js](https://mozilla.github.io/pdf.js/)
-- [PDF-lib](https://pdf-lib.js.org/)
+| Feature | Details |
+|---|---|
+| Dark presets | `Warm`, `Classic`, `Blue` |
+| Navigation | Thumbnails, page jump, zoom, fit width, `100%` |
+| Annotations | Text highlight, box highlight, text comments |
+| Search | Match navigation with focused current result |
+| Export | Save annotated PDF locally or download timestamped copy |
+| Utilities | Copy current page as image, local persistence via `localStorage` |
 
-## Run Locally
+## Quick Start
 
-### Option 1: open directly
+### Option 1: Open directly
 
-Open `index.html` directly in the browser.
+Open `index.html` in the browser.
 
 Notes:
-- some browser APIs may be limited under `file://`
+- some browser APIs are limited under `file://`
 - `Save as` works best when served from `localhost`
 
-### Option 2: recommended local server
+### Option 2: Recommended local server
 
 ```bash
 python -m http.server 5500
@@ -55,7 +60,7 @@ Then open:
 http://localhost:5500
 ```
 
-## Usage
+## How To Use
 
 ### Highlight text
 
@@ -80,6 +85,14 @@ http://localhost:5500
 - `Salvar como`: tries to open the system save picker so you can choose folder and filename
 - `Download PDF`: downloads a timestamped copy
 
+## Tech Stack
+
+- HTML
+- CSS
+- Vanilla JavaScript
+- [PDF.js](https://mozilla.github.io/pdf.js/)
+- [PDF-lib](https://pdf-lib.js.org/)
+
 ## Privacy
 
 - PDFs are processed locally in the browser
@@ -88,11 +101,17 @@ http://localhost:5500
 
 ## Security Notes
 
-- no tokens, secrets, private keys, or credentials were found in the local repository during review
+- no tokens, secrets, private keys, or credentials were found in the repository during review
 - the project currently depends on public CDNs for `pdf.js` and `pdf-lib`
-- for stricter production setups, consider vendoring these assets locally and adding integrity controls where possible
+- for stricter production use, consider vendoring these assets locally and applying integrity controls where possible
 
-## Repository Files
+## Known Limitations
+
+- `Save as` depends on browser support for the File System Access API
+- direct `file://` usage may limit some browser capabilities
+- CDNs are required unless library files are bundled locally
+
+## Repository Structure
 
 - `index.html`: full application
 - `README.md`: English documentation
