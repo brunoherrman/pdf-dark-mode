@@ -1,103 +1,103 @@
+[English](./README.md) | [Português (Brasil)](./README.pt-BR.md)
+
 # PDF Dark Mode
 
-Leitor de PDF em modo escuro, 100% client-side, feito para leitura confortável, marcações rápidas e exportação do PDF anotado.
+Dark-mode PDF reader that runs entirely in the browser, with highlights, text comments, search, zoom, print copy, and annotated PDF export.
 
-## Description
+## Overview
 
-Dark-mode PDF reader that runs entirely in the browser, with highlights, comments, search, zoom, print copy, and annotated PDF export.
-
-## Preview
-
-- Leitura de PDF em modo escuro com presets visuais
-- Navegação por miniaturas, busca e atalho para página
-- Marcações por seleção de texto e caixa
-- Comentários em texto com tamanho, negrito e itálico
-- Cópia de print da página atual
-- Exportação do PDF com anotações
-- Salvamento local e download com timestamp
+PDF Dark Mode is a lightweight client-side reader built for comfortable long-form reading. It lets you open a PDF locally, switch between dark presets, navigate quickly, highlight content, add styled comments, and export the annotated file without a backend.
 
 ## Features
 
-- `Warm`, `Classic` e `Blue` como presets de visualização
-- Busca com destaque de ocorrências e foco visual no resultado atual
-- Zoom, ajustar largura e `100%` com navegação mais estável
-- Histórico de ações com `Ctrl + Z` e `Ctrl + Y`
-- Paleta de marcação com cor personalizada persistida em `localStorage`
-- Painel lateral com lista de marcações e edição de comentários em texto
-- Exportação do PDF anotado sem backend
+- Dark reading presets: `Warm`, `Classic`, and `Blue`
+- Search with visible current-match emphasis
+- Stable page navigation, thumbnails, and page jump
+- Text highlight and box highlight tools
+- Click-to-place text comments with size, bold, and italic styles
+- Undo and redo with `Ctrl + Z` / `Ctrl + Y`
+- Copy the current page as an image
+- Export annotated PDF locally
+- Custom annotation color persisted in `localStorage`
 
-## Stack
+## Tech Stack
 
 - HTML
 - CSS
-- JavaScript vanilla
+- Vanilla JavaScript
 - [PDF.js](https://mozilla.github.io/pdf.js/)
 - [PDF-lib](https://pdf-lib.js.org/)
 
-## Running Locally
+## Run Locally
 
-### Opção 1: abrir direto
+### Option 1: open directly
 
-Você pode abrir o `index.html` diretamente no navegador.
+Open `index.html` directly in the browser.
 
-Observação:
-- algumas APIs modernas do navegador podem ficar limitadas em `file://`
-- o botão `Salvar como` depende do File System Access API e funciona melhor em `localhost`
+Notes:
+- some browser APIs may be limited under `file://`
+- `Save as` works best when served from `localhost`
 
-### Opção 2: servidor local recomendado
+### Option 2: recommended local server
 
 ```bash
 python -m http.server 5500
 ```
 
-Depois abra:
+Then open:
 
 ```text
 http://localhost:5500
 ```
 
-## How To Use
+## Usage
 
-### Marcação de texto
+### Highlight text
 
-1. Clique em `Caneta`
-2. Selecione o texto no PDF
+1. Click `Caneta`
+2. Select text inside the PDF
 
-### Marcação por caixa
+### Draw a box highlight
 
-1. Clique em `Caixa`
-2. Arraste sobre a área desejada
+1. Click `Caixa`
+2. Drag over the desired area
 
-### Comentário em texto
+### Insert a text comment
 
-1. Clique em `T`
-2. Clique no ponto da página onde quer inserir o comentário
-3. Digite o texto
-4. Ajuste tamanho, negrito e itálico
-5. Clique em `OK`
+1. Click `T`
+2. Click anywhere on the page
+3. Type the comment in the popup
+4. Adjust size, bold, and italic
+5. Click `OK`
 
-### Salvar PDF anotado
+### Save annotated PDF
 
-- `Salvar como`: tenta abrir o seletor do sistema para escolher pasta e nome
-- `Download PDF`: baixa uma cópia com data e hora no nome
+- `Salvar como`: tries to open the system save picker so you can choose folder and filename
+- `Download PDF`: downloads a timestamped copy
 
 ## Privacy
 
-- o PDF é processado localmente no navegador
-- não existe backend neste projeto
-- as marcações são salvas localmente no navegador via `localStorage`
+- PDFs are processed locally in the browser
+- there is no backend in this project
+- annotations are stored locally in the browser via `localStorage`
 
 ## Security Notes
 
-- não foram encontrados tokens, segredos, chaves privadas ou credenciais no repositório local durante a revisão
-- o projeto depende de CDNs públicos para carregar `pdf.js` e `pdf-lib`
-- para uso mais rígido em produção, vale considerar fixar assets localmente e adicionar política de integridade/subresource integrity quando aplicável
+- no tokens, secrets, private keys, or credentials were found in the local repository during review
+- the project currently depends on public CDNs for `pdf.js` and `pdf-lib`
+- for stricter production setups, consider vendoring these assets locally and adding integrity controls where possible
 
-## Files
+## Repository Files
 
-- `index.html`: aplicação completa
-- `.gitignore`: exclusões para publicação pública
-- `LICENSE`: licença do projeto
+- `index.html`: full application
+- `README.md`: English documentation
+- `README.pt-BR.md`: Brazilian Portuguese documentation
+- `.gitignore`: public-repo exclusions
+- `LICENSE`: project license
+
+## Recommended GitHub Description
+
+Dark-mode PDF reader with highlights, comments, search, zoom, print copy, and annotated PDF export — fully client-side.
 
 ## License
 
