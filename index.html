@@ -1254,6 +1254,10 @@ $("searchInput").addEventListener("keydown",e=>{
   if(v.trim().toLowerCase()!==searchQuery) doSearch(v);
   else gotoMatch(searchPos+1);   // Enter de novo = proximo
 });
+$("searchInput").addEventListener("input",e=>{
+  if(e.target.value.trim()) return;
+  doSearch("");
+});
 $("searchNext").onclick=()=>gotoMatch(searchPos+1);
 $("searchPrev").onclick=()=>gotoMatch(searchPos-1);
 
