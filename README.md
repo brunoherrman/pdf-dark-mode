@@ -4,6 +4,11 @@
 
 Dark-mode PDF reader that runs entirely in the browser, with highlights, text comments, search, zoom, print copy, and annotated PDF export.
 
+## Quick Access
+
+- [Open `index.html` on GitHub](./index.html)
+- [Download `index.html`](https://github.com/brunoherrman/pdf-dark-mode/raw/main/index.html)
+
 ## Overview
 
 PDF Dark Mode is a lightweight client-side reader built for comfortable long-form reading. It lets you open a PDF locally, switch between dark presets, navigate quickly, highlight content, add styled comments, and export the annotated file without a backend.
