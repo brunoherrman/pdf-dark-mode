@@ -128,8 +128,10 @@ select.tb{
 .mark-layer{position:absolute;inset:0;pointer-events:none;z-index:6}
 .mark-layer.draw{pointer-events:auto;cursor:crosshair}
 .mark-rect{position:absolute}
+.search-layer{position:absolute;inset:0;pointer-events:none;z-index:7}
+.search-rect{position:absolute;border-radius:2px}
 .mark-text{
-  position:absolute;z-index:7;line-height:1.25;white-space:pre-wrap;
+  position:absolute;z-index:8;line-height:1.25;white-space:pre-wrap;
   max-width:65%;word-break:break-word;pointer-events:none;
   text-shadow:0 1px 2px rgba(0,0,0,.18);
 }
@@ -284,6 +286,7 @@ input.tb:disabled{opacity:.4}
     <button class="tb" id="markBox" disabled>&#9744; Caixa</button>
     <button class="tb" id="markText" disabled>T</button>
     <button class="tb" id="undoBtn" disabled>&#8634; Desfazer</button>
+    <button class="tb" id="redoBtn" disabled>&#8635; Refazer</button>
     <div class="swatches" id="swatches"></div>
     <button class="tb" id="marksBtn" disabled>&#9783; Marcações</button>
     <button class="tb" id="copyPage" disabled>&#128247; Copiar print</button>
@@ -372,7 +375,7 @@ const PRESETS = {
   },
   classic: {
     pageFilter: "invert(1) grayscale(1) contrast(1.08) brightness(1.02)",
-    viewerBg:   "#000000",
+    viewerBg:   "#101010",
     thumbFilter:"invert(1) grayscale(1) contrast(1.08) brightness(1.02)"
   },
   blue: {
@@ -388,6 +391,12 @@ const COLORS = {
   blue:  {name:"Azul",    rgb:[59,130,246]},
   green: {name:"Verde",   rgb:[34,197,94]},
   pink:  {name:"Rosa",    rgb:[236,72,153]}
+};
+
+const SEARCH_COLORS = {
+  warm:{hit:"rgba(255,214,0,.30)", current:"rgba(255,153,0,.55)", outline:"rgba(255,245,200,.6)"},
+  classic:{hit:"rgba(120,170,255,.26)", current:"rgba(0,140,255,.5)", outline:"rgba(255,255,255,.65)"},
+  blue:{hit:"rgba(255,217,102,.26)", current:"rgba(255,165,0,.48)", outline:"rgba(255,244,214,.6)"}
 };
 
 /* ============================================================
@@ -669,6 +678,7 @@ function applyPreset(){
   document.querySelector(".viewer-wrap").style.background=p.viewerBg;
   pageHolders.forEach(ph=>{ if(ph.canvas) ph.canvas.style.filter=p.pageFilter; });
   document.querySelectorAll(".thumb canvas").forEach(c=>c.style.filter=p.thumbFilter);
+  if(searchQuery) pageHolders.forEach((ph,i)=>{ if(ph.rendered) applySearchHighlight(i); });
 }
 $("preset").onchange=applyPreset;
 
@@ -739,10 +749,14 @@ async function buildViewer(){
     const textLayer=document.createElement("div");
     textLayer.className="text-layer";
     textLayer.dataset.idx=i;
+    const searchLayer=document.createElement("div");
+    searchLayer.className="search-layer";
+    searchLayer.dataset.idx=i;
 
     holder.appendChild(canvas);
     holder.appendChild(markLayer);
     holder.appendChild(textLayer);
+    holder.appendChild(searchLayer);
     viewer.appendChild(holder);
 
     // tamanho placeholder p/ scroll correto antes de renderizar
@@ -751,7 +765,7 @@ async function buildViewer(){
     holder.style.width=vp.width+"px";
     holder.style.height=vp.height+"px";
 
-    pageHolders.push({holder,canvas,markLayer,textLayer,viewport:vp,rendered:false,page});
+    pageHolders.push({holder,canvas,markLayer,textLayer,searchLayer,viewport:vp,rendered:false,page});
     io.observe(holder);
   }
 }
@@ -1067,6 +1081,7 @@ function redoMark(){
   syncMarksUI();
 }
 $("undoBtn").onclick=undoMark;
+$("redoBtn").onclick=redoMark;
 
 /* desenha marcacoes salvas sobre a camada da pagina */
 function drawMarksOnLayer(idx){
@@ -1176,29 +1191,61 @@ function searchBtns(){
   const on=searchMatches.length>0;
   $("searchPrev").disabled=!on; $("searchNext").disabled=!on;
 }
+function buildSearchRects(idx){
+  const ph=pageHolders[idx];
+  if(!ph||!searchQuery) return [];
+  const query=searchQuery.toLowerCase();
+  const hits=[];
+  ph.textLayer.querySelectorAll("span").forEach(sp=>{
+    const text=sp.textContent||"";
+    const lower=text.toLowerCase();
+    let from=0;
+    while(true){
+      const found=lower.indexOf(query,from);
+      if(found<0) break;
+      const node=sp.firstChild;
+      if(node && node.nodeType===Node.TEXT_NODE){
+        const range=document.createRange();
+        range.setStart(node,found);
+        range.setEnd(node,found+query.length);
+        Array.from(range.getClientRects()).forEach(rc=>{
+          hits.push({
+            left:rc.left-ph.textLayer.getBoundingClientRect().left,
+            top:rc.top-ph.textLayer.getBoundingClientRect().top,
+            width:rc.width,
+            height:rc.height
+          });
+        });
+      }
+      from=found+query.length;
+    }
+  });
+  return hits;
+}
 function applySearchHighlight(idx){
   const ph=pageHolders[idx];
   if(!ph||!searchQuery) return;
+  const palette=SEARCH_COLORS[$("preset").value]||SEARCH_COLORS.warm;
   const currentMatch=searchMatches[searchPos];
-  let pageLocalIndex=0;
-  let currentSpan=null;
-  ph.textLayer.querySelectorAll("span").forEach(sp=>{
-    const isHit=sp.textContent.toLowerCase().includes(searchQuery);
-    sp.classList.toggle("search-hit", isHit);
-    sp.classList.remove("search-current");
-    if(isHit){
-      if(currentMatch && currentMatch.page===idx+1 && pageLocalIndex===currentMatch.pageHitIndex){
-        sp.classList.add("search-current");
-        currentSpan=sp;
-      }
-      pageLocalIndex++;
-    }
+  const hits=buildSearchRects(idx);
+  ph.searchLayer.innerHTML="";
+  hits.forEach((hit,i)=>{
+    const rect=document.createElement("div");
+    const isCurrent=currentMatch && currentMatch.page===idx+1 && i===currentMatch.pageHitIndex;
+    rect.className="search-rect"+(isCurrent?" current":"");
+    rect.style.left=hit.left+"px";
+    rect.style.top=hit.top+"px";
+    rect.style.width=hit.width+"px";
+    rect.style.height=hit.height+"px";
+    rect.style.background=isCurrent?palette.current:palette.hit;
+    rect.style.boxShadow=isCurrent?`0 0 0 1px ${palette.outline}`:"none";
+    ph.searchLayer.appendChild(rect);
   });
-  if(currentSpan){ currentSpan.scrollIntoView({block:"center",inline:"nearest"}); }
+  const currentRect=ph.searchLayer.querySelector(".search-rect.current");
+  if(currentRect){ currentRect.scrollIntoView({block:"center",inline:"nearest"}); }
 }
 function clearSearchHighlights(){
-  document.querySelectorAll(".text-layer span.search-hit,.text-layer span.search-current")
-    .forEach(sp=>sp.classList.remove("search-hit","search-current"));
+  document.querySelectorAll(".search-layer").forEach(layer=>layer.innerHTML="");
 }
 $("searchInput").addEventListener("keydown",e=>{
   if(e.key!=="Enter") return;
@@ -1438,7 +1485,12 @@ $("copyPage").onclick=async()=>{
 $('savePdfAs').onclick=async()=>{
   if(!rawBytes){toast("Abra um PDF primeiro.");return;}
   if(!canUseSavePicker()){
-    toast("Salvar como precisa do File System Access API. Abra pelo servidor local (ex.: http://localhost:5500) para escolher pasta e substituir arquivo.");
+    const wantsDownload=confirm("Salvar como precisa do File System Access API. Abra pelo servidor local (ex.: http://localhost:5500) para escolher pasta e substituir arquivo.\n\nDeseja baixar uma cópia agora?");
+    if(wantsDownload){
+      const bytes=await buildMarkedPdfBytes();
+      triggerPdfDownload(bytes,fileName||"documento.pdf");
+      toast("Cópia baixada com o nome atual.");
+    }
     return;
   }
   showLoading(true);
@@ -1475,7 +1527,7 @@ $("downloadPdf").onclick=async()=>{
    UI helpers
    ============================================================ */
 function enableUI(on){
-  ["zoomIn","zoomOut","fitWidth","fitPage","searchInput","gotoInput","markPen","markBox","markText","undoBtn","marksBtn","copyPage","savePdfAs","downloadPdf","clearMarks"]
+  ["zoomIn","zoomOut","fitWidth","fitPage","searchInput","gotoInput","markPen","markBox","markText","undoBtn","redoBtn","marksBtn","copyPage","savePdfAs","downloadPdf","clearMarks"]
     .forEach(id=>$(id).disabled=!on);
 }
 function showLoading(on){ $("loadingMsg").classList.toggle("hidden",!on); }
