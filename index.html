@@ -1,0 +1,1503 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Dark Reader</title>
+
+<!-- PDF.js (render) e PDF-lib (exportar marcado) via CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+
+<style>
+:root{
+  --bg:#0c0c0d;            /* fundo geral quase preto */
+  --panel:#161618;         /* sidebars/topbar */
+  --panel-2:#1d1d20;       /* botoes */
+  --panel-3:#26262a;       /* hover */
+  --border:#303036;
+  --text:#e6e6e8;
+  --text-dim:#9a9aa2;
+  --accent:#3b82f6;        /* azul selecao */
+  --page-bg:#202024;       /* fundo atras das paginas */
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Segoe UI",Roboto,Arial,sans-serif;
+  font-size:14px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+
+/* ---------- TOPBAR ---------- */
+.topbar{
+  height:48px; flex:0 0 48px;
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:14px;
+  padding:0 14px;
+}
+.topbar .logo{font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px}
+.topbar .logo .moon{color:#f5c043}
+.topbar .spacer{flex:1}
+.toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+
+button.tb, label.tb{
+  background:var(--panel-2);
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:6px 10px;
+  cursor:pointer;
+  font-size:13px;
+  display:inline-flex;align-items:center;gap:6px;
+  user-select:none;
+}
+button.tb:hover, label.tb:hover{background:var(--panel-3)}
+button.tb.active{background:var(--accent);border-color:var(--accent);color:#fff}
+button.tb:disabled{opacity:.4;cursor:not-allowed}
+
+select.tb{
+  background:var(--panel-2);color:var(--text);
+  border:1px solid var(--border);border-radius:6px;
+  padding:6px 8px;font-size:13px;cursor:pointer;
+}
+
+.zoom-label{min-width:46px;text-align:center;color:var(--text-dim)}
+
+/* paleta de cores de marcacao */
+.swatches{display:flex;gap:4px;align-items:center}
+.swatch{
+  width:22px;height:22px;border-radius:5px;cursor:pointer;
+  border:2px solid transparent;
+}
+.swatch.sel{border-color:#fff;box-shadow:0 0 0 1px var(--bg)}
+.swatch.custom{
+  position:relative;overflow:hidden;
+  background:linear-gradient(135deg,#ff5f6d,#ffc371,#47cf73,#5b8cff,#c471ed);
+}
+.swatch.custom input{
+  position:absolute;inset:0;opacity:0;cursor:pointer;
+}
+
+/* ---------- MAIN LAYOUT ---------- */
+.main{flex:1;display:flex;min-height:0}
+
+/* sidebar thumbnails */
+.sidebar{
+  width:200px;flex:0 0 200px;
+  background:var(--panel);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+}
+.preset-box{padding:12px 12px 6px;}
+.preset-box select{width:100%}
+.counter{
+  text-align:center;color:var(--text-dim);
+  font-size:13px;padding:4px 0 8px;
+}
+.thumbs{
+  flex:1;overflow-y:auto;padding:4px 10px 14px;
+}
+.thumb{
+  margin:0 auto 14px;cursor:pointer;width:100%;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+}
+.thumb canvas{
+  width:100%;height:auto;display:block;border-radius:3px;
+  border:2px solid transparent;background:#000;
+}
+.thumb.active canvas{border-color:var(--accent)}
+.thumb .n{color:var(--text-dim);font-size:12px}
+
+/* central viewer */
+.viewer-wrap{flex:1;position:relative;min-width:0;background:var(--page-bg)}
+.viewer{
+  position:absolute;inset:0;overflow:auto;
+  padding:24px;
+  display:flex;flex-direction:column;align-items:center;gap:24px;
+}
+.page-holder{position:relative;line-height:0;box-shadow:0 6px 24px rgba(0,0,0,.55)}
+.page-holder canvas{display:block}
+/* camada de marcacoes: exibe highlights; captura mouse so no modo Marcar */
+.mark-layer{position:absolute;inset:0;pointer-events:none;z-index:6}
+.mark-layer.draw{pointer-events:auto;cursor:crosshair}
+.mark-rect{position:absolute}
+.mark-text{
+  position:absolute;z-index:7;line-height:1.25;white-space:pre-wrap;
+  max-width:65%;word-break:break-word;pointer-events:none;
+  text-shadow:0 1px 2px rgba(0,0,0,.18);
+}
+
+/* camada de texto p/ selecao/copia (estilo PDF.js) */
+.text-layer{
+  position:absolute;text-align:initial;inset:0;overflow:hidden;
+  line-height:1;-webkit-text-size-adjust:none;text-size-adjust:none;
+  forced-color-adjust:none;transform-origin:0 0;z-index:5;
+}
+.text-layer span,.text-layer br{
+  color:transparent;position:absolute;white-space:pre;cursor:text;
+  transform-origin:0 0;
+}
+.text-layer.mark-on{pointer-events:none}   /* no modo marcar, texto nao intercepta o drag */
+.text-layer ::selection{background:rgba(255,214,0,.4)}
+.text-layer ::-moz-selection{background:rgba(255,214,0,.4)}
+
+/* mensagem quando vazio + loading */
+.overlay-msg{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;
+  color:var(--text-dim);text-align:center;padding:20px;
+}
+.overlay-msg h2{color:var(--text);font-weight:600}
+.spinner{
+  width:38px;height:38px;border-radius:50%;
+  border:4px solid var(--border);border-top-color:var(--accent);
+  animation:spin 1s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+
+/* ---------- PAINEL DE MARCACOES ---------- */
+.marks-panel{
+  position:absolute;top:0;right:0;bottom:0;width:330px;
+  background:rgba(22,22,24,.72);border-left:1px solid rgba(48,48,54,.75);
+  backdrop-filter:blur(10px);
+  transform:translateX(100%);transition:transform .2s ease;
+  display:flex;flex-direction:column;z-index:20;
+}
+.marks-panel.open{transform:translateX(0)}
+.marks-panel header{
+  padding:14px;border-bottom:1px solid rgba(48,48,54,.75);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.marks-panel header h3{font-size:15px}
+.marks-list{flex:1;overflow-y:auto;padding:10px}
+.mark-item{
+  background:var(--panel-2);border:1px solid var(--border);
+  border-radius:8px;padding:10px;margin-bottom:10px;
+}
+.mark-item .row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.mark-item .dot{width:14px;height:14px;border-radius:4px;flex:0 0 14px}
+.mark-item .meta{font-size:12px;color:var(--text-dim);line-height:1.4}
+.mark-item .acts{display:flex;gap:6px;margin-top:8px}
+.mark-item .acts button{
+  flex:1;font-size:12px;padding:5px;border-radius:5px;cursor:pointer;
+  border:1px solid var(--border);background:var(--panel-3);color:var(--text);
+}
+.mark-item .acts button.del{color:#ff7a7a}
+.mark-item .acts button:hover{background:var(--accent);color:#fff}
+.empty-marks{color:var(--text-dim);text-align:center;padding:30px 10px}
+
+/* toast erro */
+.toast{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  background:#5b1d1d;color:#ffdada;border:1px solid #8a3030;
+  padding:10px 16px;border-radius:8px;z-index:50;max-width:80%;
+}
+input[type=file]{display:none}
+
+/* inputs de texto/numero na toolbar */
+input.tb{
+  background:var(--panel-2);color:var(--text);
+  border:1px solid var(--border);border-radius:6px;
+  padding:6px 8px;font-size:13px;
+}
+input.tb:focus{outline:none;border-color:var(--accent)}
+input.tb:disabled{opacity:.4}
+#searchCount{min-width:42px}
+
+/* ir para pagina (sidebar) */
+.goto-box{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  color:var(--text-dim);font-size:13px;padding:0 8px 8px;
+}
+.goto-box input{
+  width:56px;background:var(--panel-2);color:var(--text);
+  border:1px solid var(--border);border-radius:6px;
+  padding:4px 6px;font-size:13px;text-align:center;
+}
+.goto-box input:focus{outline:none;border-color:var(--accent)}
+
+/* destaque de resultado de busca na camada de texto */
+.text-layer span.search-hit{background:rgba(255,165,0,.55);border-radius:2px}
+.text-layer span.search-current{background:rgba(255,90,0,.9);border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+
+/* texto da marcacao no painel */
+.mark-item .txt{
+  font-size:12px;color:var(--text);line-height:1.4;margin-bottom:4px;
+  max-height:54px;overflow:hidden;font-style:italic;
+}
+.tb.toggle{min-width:32px;justify-content:center;padding-inline:8px}
+.text-pop{
+  position:absolute;z-index:40;min-width:260px;max-width:320px;
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  box-shadow:0 14px 32px rgba(0,0,0,.45);padding:10px;display:none;
+}
+.text-pop.open{display:block}
+.text-pop textarea{
+  width:100%;min-height:84px;resize:vertical;margin-bottom:8px;
+  background:var(--panel-2);color:var(--text);border:1px solid var(--border);
+  border-radius:8px;padding:8px;font:inherit;
+}
+.text-pop .row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.text-pop .row.end{justify-content:flex-end;margin-bottom:0}
+.text-pop .sz{width:64px}
+
+/* scrollbars escuros */
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-thumb{background:#3a3a40;border-radius:6px}
+::-webkit-scrollbar-track{background:#141416}
+</style>
+</head>
+<body>
+
+<!-- ===================== TOPBAR ===================== -->
+<div class="topbar">
+  <div class="logo"><span class="moon">&#9790;</span> PDF Dark Reader</div>
+
+  <div class="toolbar">
+    <label class="tb" for="file">&#128193; Abrir PDF</label>
+    <input type="file" id="file" accept="application/pdf">
+
+    <button class="tb" id="zoomOut" disabled>&minus;</button>
+    <span class="zoom-label" id="zoomLabel">100%</span>
+    <button class="tb" id="zoomIn" disabled>&plus;</button>
+    <button class="tb" id="fitWidth" disabled>Ajustar largura</button>
+    <button class="tb" id="fitPage" disabled>100%</button>
+
+    <input type="text" class="tb" id="searchInput" placeholder="&#128269; Pesquisar" disabled style="width:150px">
+    <button class="tb" id="searchPrev" disabled>&#8249;</button>
+    <span class="zoom-label" id="searchCount">0/0</span>
+    <button class="tb" id="searchNext" disabled>&#8250;</button>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="toolbar">
+    <button class="tb" id="markPen" disabled>&#9998; Caneta</button>
+    <button class="tb" id="markBox" disabled>&#9744; Caixa</button>
+    <button class="tb" id="markText" disabled>T</button>
+    <button class="tb" id="undoBtn" disabled>&#8634; Desfazer</button>
+    <div class="swatches" id="swatches"></div>
+    <button class="tb" id="marksBtn" disabled>&#9783; Marcações</button>
+    <button class="tb" id="copyPage" disabled>&#128247; Copiar print</button>
+    <button class="tb" id="savePdfAs" disabled>&#128190; Salvar como</button>
+    <button class="tb" id="downloadPdf" disabled>&#11015; Download PDF</button>
+    <button class="tb" id="clearMarks" disabled>&#128465; Remover marcações</button>
+  </div>
+</div>
+
+<!-- ===================== MAIN ===================== -->
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="preset-box">
+      <select class="tb" id="preset">
+        <option value="warm">Warm</option>
+        <option value="classic">Classic</option>
+        <option value="blue">Blue</option>
+      </select>
+    </div>
+    <div class="counter" id="counter">0/0 (0%)</div>
+    <div class="goto-box">
+      Ir p/ <input type="number" id="gotoInput" min="1" disabled> / <span id="gotoTotal">0</span>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+  </aside>
+
+  <!-- VIEWER -->
+  <div class="viewer-wrap">
+    <div class="viewer" id="viewer"></div>
+
+    <!-- mensagem vazio -->
+    <div class="overlay-msg" id="emptyMsg">
+      <h2>Nenhum PDF carregado</h2>
+      <div>Clique em <b>Abrir PDF</b> para começar a leitura em modo escuro.</div>
+    </div>
+
+    <!-- loading -->
+    <div class="overlay-msg hidden" id="loadingMsg">
+      <div class="spinner"></div>
+      <div>Carregando PDF…</div>
+    </div>
+
+    <!-- PAINEL DE MARCACOES -->
+    <div class="marks-panel" id="marksPanel">
+      <header>
+        <h3>Marcações</h3>
+        <button class="tb" id="closeMarks">&times;</button>
+      </header>
+      <div class="marks-list" id="marksList"></div>
+    </div>
+
+    <div class="text-pop" id="textPop">
+      <textarea id="textPopComment" placeholder="Digite o comentário"></textarea>
+      <div class="row">
+        <input type="number" class="tb sz" id="textPopSize" min="8" max="72" value="18">
+        <button class="tb toggle" id="textPopBold"><b>B</b></button>
+        <button class="tb toggle" id="textPopItalic"><i>I</i></button>
+      </div>
+      <div class="row end">
+        <button class="tb" id="textPopCancel">Cancelar</button>
+        <button class="tb" id="textPopOk">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG PDF.js worker (via CDN para funcionar local file://)
+   ============================================================ */
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+/* ============================================================
+   PRESETS DE DARK MODE
+   Tecnica leve: CSS filter (invert + hue-rotate p/ manter cores)
+   + tint por preset. Afeta canvas das paginas E thumbnails.
+   ============================================================ */
+const PRESETS = {
+  warm: {
+    pageFilter: "invert(0.9) hue-rotate(180deg) brightness(0.95) contrast(0.95)",
+    viewerBg:   "#161618",
+    thumbFilter:"invert(0.9) hue-rotate(180deg) brightness(0.95)"
+  },
+  classic: {
+    pageFilter: "invert(1) grayscale(1) contrast(1.08) brightness(1.02)",
+    viewerBg:   "#000000",
+    thumbFilter:"invert(1) grayscale(1) contrast(1.08) brightness(1.02)"
+  },
+  blue: {
+    pageFilter: "invert(0.88) hue-rotate(180deg) sepia(0.25) saturate(1.4) brightness(0.9) contrast(0.95)",
+    viewerBg:   "#1a2030",
+    thumbFilter:"invert(0.88) hue-rotate(180deg) sepia(0.25) saturate(1.4) brightness(0.9)"
+  }
+};
+
+/* cores de marcacao (rgba p/ tela; rgb p/ PDF-lib) */
+const COLORS = {
+  yellow:{name:"Amarelo", rgb:[255,214,0]},
+  blue:  {name:"Azul",    rgb:[59,130,246]},
+  green: {name:"Verde",   rgb:[34,197,94]},
+  pink:  {name:"Rosa",    rgb:[236,72,153]}
+};
+
+/* ============================================================
+   ESTADO GLOBAL
+   ============================================================ */
+let pdfDoc=null;
+let rawBytes=null;          // bytes originais p/ exportar marcado
+let fileName="documento.pdf";
+let storageKey=null;
+let numPages=0;
+let scale=1.2;              // zoom
+let currentPage=1;
+let pageJumpLock=0;         // pagina alvo durante scroll programatico
+let pageJumpUnlockTimer=null;
+let pageHolders=[];         // {holder,canvas,markLayer,viewport,rendered}
+let marks=[];               // marcacoes carregadas
+let undoStack=[];
+let redoStack=[];
+let markMode=false;
+let markType="pen";          // "pen" | "box" | "text"
+let currentColor=loadSelectedColor();
+let textFontSize=18;
+let textBold=false;
+let textItalic=false;
+let editingTextMarkId=null;
+let pendingTextPlacement=null;
+let pageTextCache=[];        // texto por pagina (lazy, p/ busca)
+let searchQuery="";
+let searchMatches=[];        // [{page}]
+let searchPos=-1;
+
+const $=id=>document.getElementById(id);
+const viewer=$("viewer");
+const textPop=$("textPop");
+
+function setCurrentPage(page){
+  currentPage=page;
+  updateCounter();
+  markActiveThumb(page-1);
+}
+
+function cloneMarksState(state){
+  return JSON.parse(JSON.stringify(state));
+}
+
+function syncMarksUI(){
+  saveMarks();
+  pageHolders.forEach((_,i)=>drawMarksOnLayer(i));
+  renderMarksPanel();
+}
+
+function commitMarks(nextMarks,{recordUndo=true,clearRedo=true}={}){
+  if(recordUndo) undoStack.push(cloneMarksState(marks));
+  if(clearRedo) redoStack=[];
+  marks=nextMarks;
+  syncMarksUI();
+}
+
+function getPrimaryVisiblePage(){
+  if(!pageHolders.length) return 1;
+  const viewTop=viewer.scrollTop;
+  const viewBottom=viewTop+viewer.clientHeight;
+  let bestPage=1;
+  let bestVisible=-1;
+  for(let i=0;i<pageHolders.length;i++){
+    const top=pageHolders[i].holder.offsetTop;
+    const bottom=top+pageHolders[i].holder.offsetHeight;
+    const visible=Math.min(bottom,viewBottom)-Math.max(top,viewTop);
+    if(visible>bestVisible){
+      bestVisible=visible;
+      bestPage=i+1;
+    }
+  }
+  return bestPage;
+}
+
+function syncCurrentPageFromView(){
+  if(pageJumpLock) return;
+  setCurrentPage(getPrimaryVisiblePage());
+}
+
+function lockPageJump(page,delay=220){
+  pageJumpLock=page;
+  clearTimeout(pageJumpUnlockTimer);
+  pageJumpUnlockTimer=setTimeout(()=>{
+    if(pageJumpLock===page) pageJumpLock=0;
+  },delay);
+}
+
+function isHexColor(value){
+  return typeof value==="string" && /^#[0-9a-fA-F]{6}$/.test(value);
+}
+
+function rgbToHex(rgb){
+  return "#"+rgb.map(v=>v.toString(16).padStart(2,"0")).join("");
+}
+
+function hexToRgb(hex){
+  const clean=hex.replace("#","");
+  return [0,2,4].map(i=>parseInt(clean.slice(i,i+2),16));
+}
+
+function colorInfo(colorValue){
+  if(COLORS[colorValue]){
+    const c=COLORS[colorValue];
+    return {key:colorValue,name:c.name,rgb:c.rgb,hex:rgbToHex(c.rgb)};
+  }
+  if(isHexColor(colorValue)){
+    const rgb=hexToRgb(colorValue);
+    return {key:null,name:"Personalizada",rgb,hex:colorValue.toLowerCase()};
+  }
+  const fallback=COLORS.yellow;
+  return {key:"yellow",name:fallback.name,rgb:fallback.rgb,hex:rgbToHex(fallback.rgb)};
+}
+
+function normalizeFontSize(value){
+  const size=Math.round(Number(value)||18);
+  return Math.max(8,Math.min(72,size));
+}
+
+function currentTextStyle(){
+  return {
+    fontSize:normalizeFontSize(textFontSize),
+    fontWeight:textBold?"bold":"normal",
+    fontStyle:textItalic?"italic":"normal"
+  };
+}
+
+function getTextMarkText(){
+  return ($("textPopComment").value||"").trim();
+}
+
+function refreshTextTools(){
+  $("textPopSize").value=normalizeFontSize(textFontSize);
+  $("textPopBold").classList.toggle("active",textBold);
+  $("textPopItalic").classList.toggle("active",textItalic);
+  $("markText").classList.toggle("active",markMode&&markType==="text");
+}
+
+function clearTextEditing(){
+  editingTextMarkId=null;
+}
+
+function closeTextPop(){
+  textPop.classList.remove("open");
+  pendingTextPlacement=null;
+}
+
+function openTextPop(page,x,y){
+  pendingTextPlacement={page,x,y};
+  refreshTextTools();
+  const holder=pageHolders[page-1]?.holder;
+  if(!holder) return;
+  const rawLeft=holder.offsetLeft - viewer.scrollLeft + x*holder.offsetWidth + 16;
+  const rawTop=holder.offsetTop - viewer.scrollTop + y*holder.offsetHeight + 16;
+  const maxLeft=Math.max(16, viewer.clientWidth - 340);
+  const maxTop=Math.max(16, viewer.clientHeight - 220);
+  textPop.style.left=Math.max(16, Math.min(rawLeft, maxLeft))+"px";
+  textPop.style.top=Math.max(16, Math.min(rawTop, maxTop))+"px";
+  textPop.classList.add("open");
+  $("textPopComment").focus();
+  $("textPopComment").select();
+}
+
+function submitTextPop(){
+  if(!pendingTextPlacement) return;
+  textFontSize=normalizeFontSize($("textPopSize").value);
+  const ok=upsertTextMark(pendingTextPlacement.page,pendingTextPlacement.x,pendingTextPlacement.y);
+  if(ok) closeTextPop();
+}
+
+function loadTextMarkForEditing(gid){
+  const mark=marks.find(m=>m.gid===gid && m.kind==="text");
+  if(!mark) return;
+  editingTextMarkId=gid;
+  $("textPopComment").value=mark.text||"";
+  textFontSize=normalizeFontSize(mark.fontSize);
+  textBold=mark.fontWeight==="bold";
+  textItalic=mark.fontStyle==="italic";
+  setSelectedColor(mark.color||currentColor);
+  markMode=true;
+  markType="text";
+  $("markPen").classList.remove("active");
+  $("markBox").classList.remove("active");
+  applyMarkLayers();
+  refreshTextTools();
+  goToPage(mark.page);
+  openTextPop(mark.page,mark.x,mark.y);
+}
+
+function upsertTextMark(page,x,y){
+  const text=getTextMarkText();
+  if(!text){ toast("Digite o comentário antes de inserir o texto."); return false; }
+  const style=currentTextStyle();
+  const base={
+    page,
+    x,
+    y,
+    color:currentColor,
+    created:new Date().toISOString(),
+    kind:"text",
+    text,
+    fontSize:style.fontSize,
+    fontWeight:style.fontWeight,
+    fontStyle:style.fontStyle,
+    gid:editingTextMarkId||("g"+Date.now()+"_"+Math.floor(Math.random()*1e6))
+  };
+  if(editingTextMarkId){
+    commitMarks(marks.map(m=>m.gid===editingTextMarkId && m.kind==="text" ? {...m,...base,created:m.created} : m));
+  }else{
+    commitMarks([...marks,base]);
+  }
+  clearTextEditing();
+  toast("Comentário inserido.");
+  return true;
+}
+
+function loadSelectedColor(){
+  const saved=localStorage.getItem("pdfdark::selectedColor")||"yellow";
+  return COLORS[saved] || isHexColor(saved) ? saved : "yellow";
+}
+
+function saveSelectedColor(colorValue){
+  localStorage.setItem("pdfdark::selectedColor",colorValue);
+}
+
+function syncColorSelectionUI(){
+  const info=colorInfo(currentColor);
+  document.querySelectorAll(".swatch").forEach(e=>e.classList.remove("sel"));
+  document.querySelectorAll(".swatch[data-color]").forEach(e=>{
+    if(e.dataset.color===currentColor) e.classList.add("sel");
+  });
+  const custom=$("customColor");
+  if(custom){
+    custom.value=info.hex;
+    const customSwatch=custom.closest(".swatch");
+    if(customSwatch){
+      customSwatch.style.boxShadow=`inset 0 0 0 999px ${info.hex}`;
+      if(!info.key) customSwatch.classList.add("sel");
+    }
+  }
+}
+
+function setSelectedColor(colorValue){
+  const next=COLORS[colorValue] || isHexColor(colorValue) ? colorValue : "yellow";
+  currentColor=next;
+  saveSelectedColor(next);
+  syncColorSelectionUI();
+}
+
+/* ============================================================
+   UI: paleta de cores
+   ============================================================ */
+(function buildSwatches(){
+  const box=$("swatches");
+  Object.entries(COLORS).forEach(([key,c])=>{
+    const s=document.createElement("div");
+    s.className="swatch";
+    s.dataset.color=key;
+    s.style.background=`rgb(${c.rgb.join(",")})`;
+    s.title=c.name;
+    s.onclick=()=>setSelectedColor(key);
+    box.appendChild(s);
+  });
+  const custom=document.createElement("label");
+  custom.className="swatch custom";
+  custom.title="Cor personalizada";
+  custom.innerHTML='<input type="color" id="customColor" aria-label="Cor personalizada">';
+  box.appendChild(custom);
+  $("customColor").addEventListener("input",e=>setSelectedColor(e.target.value));
+  syncColorSelectionUI();
+})();
+
+/* ============================================================
+   APLICAR PRESET (sem recarregar PDF — so muda filtros/cores)
+   ============================================================ */
+function applyPreset(){
+  const p=PRESETS[$("preset").value];
+  document.querySelector(".viewer-wrap").style.background=p.viewerBg;
+  pageHolders.forEach(ph=>{ if(ph.canvas) ph.canvas.style.filter=p.pageFilter; });
+  document.querySelectorAll(".thumb canvas").forEach(c=>c.style.filter=p.thumbFilter);
+}
+$("preset").onchange=applyPreset;
+
+/* ============================================================
+   ABRIR PDF
+   ============================================================ */
+$("file").onchange=async e=>{
+  const f=e.target.files[0];
+  if(!f) return;
+  fileName=f.name;
+  storageKey="pdfmarks::"+fileName;
+  showLoading(true);
+  try{
+    rawBytes=new Uint8Array(await f.arrayBuffer());
+    // copia p/ pdf.js (ele "consome" o buffer)
+    pdfDoc=await pdfjsLib.getDocument({data:rawBytes.slice()}).promise;
+    numPages=pdfDoc.numPages;
+    marks=loadMarks();
+    undoStack=[]; redoStack=[];
+    // reset busca p/ novo doc
+    pageTextCache=[]; searchQuery=""; searchMatches=[]; searchPos=-1;
+    $("searchInput").value=""; $("searchCount").textContent="0/0";
+    $("gotoTotal").textContent=numPages; $("gotoInput").max=numPages;
+    await buildViewer();
+    buildThumbs();
+    enableUI(true);
+    applyPreset();
+    renderMarksPanel();
+    currentPage=1;
+    updateCounter();
+  }catch(err){
+    console.error(err);
+    toast("Não foi possível abrir o PDF: "+(err.message||err));
+  }finally{
+    showLoading(false);
+  }
+};
+
+/* ============================================================
+   VIEWER: cria holders e renderiza (lazy via IntersectionObserver)
+   ============================================================ */
+let io=null;
+async function buildViewer(){
+  closeTextPop();
+  viewer.innerHTML="";
+  pageHolders=[];
+  $("emptyMsg").classList.add("hidden");
+
+  if(io) io.disconnect();
+  io=new IntersectionObserver(entries=>{
+    entries.forEach(en=>{
+      const idx=+en.target.dataset.idx;
+      if(en.isIntersecting){
+        renderPage(idx);
+      }
+    });
+  },{root:viewer,rootMargin:"200px 0px",threshold:0.1});
+
+  for(let i=0;i<numPages;i++){
+    const holder=document.createElement("div");
+    holder.className="page-holder";
+    holder.dataset.idx=i;
+
+    const canvas=document.createElement("canvas");
+    const markLayer=document.createElement("div");
+    markLayer.className="mark-layer";
+    markLayer.dataset.idx=i;
+    const textLayer=document.createElement("div");
+    textLayer.className="text-layer";
+    textLayer.dataset.idx=i;
+
+    holder.appendChild(canvas);
+    holder.appendChild(markLayer);
+    holder.appendChild(textLayer);
+    viewer.appendChild(holder);
+
+    // tamanho placeholder p/ scroll correto antes de renderizar
+    const page=await pdfDoc.getPage(i+1);
+    const vp=page.getViewport({scale});
+    holder.style.width=vp.width+"px";
+    holder.style.height=vp.height+"px";
+
+    pageHolders.push({holder,canvas,markLayer,textLayer,viewport:vp,rendered:false,page});
+    io.observe(holder);
+  }
+}
+
+/* renderiza uma pagina sob demanda */
+async function renderPage(idx){
+  const ph=pageHolders[idx];
+  if(!ph || ph.rendered) return;
+  ph.rendered=true;
+  const vp=ph.page.getViewport({scale});
+  ph.viewport=vp;
+  const dpr=window.devicePixelRatio||1;
+  ph.canvas.width=vp.width*dpr;
+  ph.canvas.height=vp.height*dpr;
+  ph.canvas.style.width=vp.width+"px";
+  ph.canvas.style.height=vp.height+"px";
+  ph.holder.style.width=vp.width+"px";
+  ph.holder.style.height=vp.height+"px";
+  const ctx=ph.canvas.getContext("2d");
+  ctx.scale(dpr,dpr);
+  await ph.page.render({canvasContext:ctx,viewport:vp}).promise;
+  ph.canvas.style.filter=PRESETS[$("preset").value].pageFilter;
+  await renderTextLayer(idx,vp);
+  applySearchHighlight(idx);
+  drawMarksOnLayer(idx);
+}
+
+/* camada de texto selecionavel (PDF.js) */
+async function renderTextLayer(idx,vp){
+  const ph=pageHolders[idx];
+  const tl=ph.textLayer;
+  tl.innerHTML="";
+  tl.style.width=vp.width+"px";
+  tl.style.height=vp.height+"px";
+  tl.style.setProperty("--scale-factor",String(vp.scale));
+  viewer.style.setProperty("--scale-factor",String(vp.scale));
+  tl.classList.toggle("mark-on",boxActive());
+  try{
+    const textContent=await ph.page.getTextContent();
+    await pdfjsLib.renderTextLayer({
+      textContent, container:tl, viewport:vp, textDivs:[]
+    }).promise;
+  }catch(err){ console.warn("text layer falhou pág",idx+1,err); }
+}
+
+/* re-render em mudanca de zoom */
+async function rerenderAll(){
+  closeTextPop();
+  for(const ph of pageHolders){ ph.rendered=false; }
+  // ajusta placeholders e re-renderiza visiveis
+  for(let i=0;i<pageHolders.length;i++){
+    const ph=pageHolders[i];
+    const vp=ph.page.getViewport({scale});
+    ph.holder.style.width=vp.width+"px";
+    ph.holder.style.height=vp.height+"px";
+    ph.viewport=vp;
+  }
+  // renderiza paginas proximas da viewport
+  pageHolders.forEach((ph,i)=>{
+    const r=ph.holder.getBoundingClientRect();
+    if(r.bottom>0 && r.top<window.innerHeight+400) renderPage(i);
+  });
+}
+
+/* ============================================================
+   THUMBNAILS
+   ============================================================ */
+async function buildThumbs(){
+  const box=$("thumbs");
+  box.innerHTML="";
+  for(let i=0;i<numPages;i++){
+    const div=document.createElement("div");
+    div.className="thumb"+(i===0?" active":"");
+    div.dataset.idx=i;
+    const canvas=document.createElement("canvas");
+    const label=document.createElement("div");
+    label.className="n";label.textContent=(i+1);
+    div.appendChild(canvas);div.appendChild(label);
+    box.appendChild(div);
+    div.onclick=()=>goToPage(i+1);
+    // renderiza thumb pequeno
+    const page=await pdfDoc.getPage(i+1);
+    const vp=page.getViewport({scale:0.25});
+    canvas.width=vp.width;canvas.height=vp.height;
+    await page.render({canvasContext:canvas.getContext("2d"),viewport:vp}).promise;
+    canvas.style.filter=PRESETS[$("preset").value].thumbFilter;
+  }
+}
+function markActiveThumb(idx){
+  document.querySelectorAll(".thumb").forEach(t=>t.classList.remove("active"));
+  const t=document.querySelector(`.thumb[data-idx="${idx}"]`);
+  if(t){t.classList.add("active");t.scrollIntoView({block:"nearest"});}
+}
+
+/* ir p/ pagina (scroll) */
+function goToPage(n){
+  n=Math.max(1,Math.min(numPages,n));
+  const ph=pageHolders[n-1];
+  if(!ph) return;
+  setCurrentPage(n);
+  lockPageJump(n,260);
+  renderPage(n-1);
+  viewer.scrollTo({top:Math.max(ph.holder.offsetTop-12,0),behavior:"auto"});
+}
+
+let scrollSyncRaf=0;
+viewer.addEventListener("scroll",()=>{
+  if(scrollSyncRaf) cancelAnimationFrame(scrollSyncRaf);
+  scrollSyncRaf=requestAnimationFrame(()=>{
+    scrollSyncRaf=0;
+    syncCurrentPageFromView();
+  });
+});
+
+/* ============================================================
+   ZOOM
+   ============================================================ */
+function setZoom(s){
+  closeTextPop();
+  scale=Math.max(0.3,Math.min(4,s));
+  $("zoomLabel").textContent=Math.round(scale/1.2*100)+"%";
+  rerenderAll();
+}
+$("zoomIn").onclick=()=>setZoom(scale+0.2);
+$("zoomOut").onclick=()=>setZoom(scale-0.2);
+$("fitWidth").onclick=()=>{
+  if(!pageHolders[0]) return;
+  const avail=viewer.clientWidth-48;
+  const base=pageHolders[0].page.getViewport({scale:1}).width;
+  setZoom(avail/base);
+};
+/* 100%: encaixa a pagina INTEIRA na altura e da scroll exato (1 pagina, sem peek) */
+$("fitPage").onclick=()=>{
+  const pg=getPrimaryVisiblePage();
+  const ph=pageHolders[pg-1]||pageHolders[0];
+  if(!ph) return;
+  const base=ph.page.getViewport({scale:1});
+  const availH=viewer.clientHeight-24;   // ajusta por ALTURA -> 1 pagina enche a tela, sem peek
+  setCurrentPage(pg);
+  lockPageJump(pg,500);
+  setZoom(availH/base.height);
+  // scroll exato p/ o topo da pagina (sem mostrar pedaco da proxima)
+  setTimeout(()=>{
+    const h=pageHolders[pg-1];
+    if(h){
+      viewer.scrollTo({top:Math.max(h.holder.offsetTop,0), behavior:"auto"});
+      setCurrentPage(pg);
+    }
+  },80);
+};
+
+/* zoom com Ctrl + roda do mouse */
+viewer.addEventListener("wheel",e=>{
+  if(!e.ctrlKey || !pdfDoc) return;
+  e.preventDefault();
+  const step=e.deltaY<0?0.1:-0.1;
+  setZoom(scale+step);
+},{passive:false});
+
+/* ============================================================
+   CONTADOR  ex: 6/208 (3%)
+   ============================================================ */
+function updateCounter(){
+  const pct=numPages?Math.round(currentPage/numPages*100):0;
+  $("counter").textContent=`${currentPage}/${numPages} (${pct}%)`;
+}
+
+/* ============================================================
+   MARCACOES — desenho na tela
+   guarda x,y,w,h RELATIVOS (0..1) p/ funcionar em qualquer zoom
+   ============================================================ */
+/* ---- SELETOR DE MODO: Caneta (texto) x Caixa (retangulo) ---- */
+function boxActive(){ return markMode && markType==="box"; }
+function textActive(){ return markMode && markType==="text"; }
+function applyMarkLayers(){
+  document.querySelectorAll(".mark-layer").forEach(l=>l.classList.toggle("draw",boxActive()));
+  document.querySelectorAll(".text-layer").forEach(l=>l.classList.toggle("mark-on",boxActive()));
+}
+function setMarkMode(type){
+  if(markMode && markType===type){ markMode=false; clearTextEditing(); closeTextPop(); }   // clica de novo = desliga
+  else {
+    markMode=true;
+    markType=type;
+    if(type!=="text"){
+      clearTextEditing();
+      closeTextPop();
+    }
+  }
+  $("markPen").classList.toggle("active",markMode&&markType==="pen");
+  $("markBox").classList.toggle("active",markMode&&markType==="box");
+  refreshTextTools();
+  applyMarkLayers();
+}
+$("markPen").onclick=()=>setMarkMode("pen");
+$("markBox").onclick=()=>setMarkMode("box");
+$("markText").onclick=()=>setMarkMode("text");
+$("textPopSize").addEventListener("change",e=>{ textFontSize=normalizeFontSize(e.target.value); refreshTextTools(); });
+$("textPopBold").onclick=()=>{ textBold=!textBold; refreshTextTools(); };
+$("textPopItalic").onclick=()=>{ textItalic=!textItalic; refreshTextTools(); };
+$("textPopCancel").onclick=()=>closeTextPop();
+$("textPopOk").onclick=()=>submitTextPop();
+$("textPopComment").addEventListener("keydown",e=>{
+  if((e.ctrlKey||e.metaKey) && e.key==="Enter"){
+    e.preventDefault();
+    submitTextPop();
+  }
+});
+refreshTextTools();
+
+viewer.addEventListener("click",e=>{
+  if(!textActive()) return;
+  const holder=e.target.closest(".page-holder");
+  if(!holder) return;
+  const idx=+holder.dataset.idx;
+  const ph=pageHolders[idx];
+  if(!ph) return;
+  const rect=ph.markLayer.getBoundingClientRect();
+  const x=(e.clientX-rect.left)/rect.width;
+  const y=(e.clientY-rect.top)/rect.height;
+  if(x<0||x>1||y<0||y>1) return;
+  if(!editingTextMarkId) $("textPopComment").value="";
+  openTextPop(idx+1,x,y);
+});
+
+/* ---- CANETA: seleciona texto -> highlight salvo (1 rect por linha) ---- */
+document.addEventListener("mouseup",()=>{
+  if(!markMode || markType!=="pen") return;
+  const sel=window.getSelection();
+  if(!sel || sel.isCollapsed || !sel.rangeCount) return;
+  const rects=sel.getRangeAt(0).getClientRects();
+  if(!rects.length) return;
+  const selText=sel.toString().replace(/\s+/g," ").trim();
+  const gid="g"+Date.now()+"_"+Math.floor(Math.random()*1e6);
+  const nextMarks=[];
+  for(const rc of rects){
+    if(rc.width<3||rc.height<3) continue;
+    const cx=rc.left+rc.width/2, cy=rc.top+rc.height/2;
+    for(let i=0;i<pageHolders.length;i++){
+      const pr=pageHolders[i].markLayer.getBoundingClientRect();
+      if(cx>=pr.left&&cx<=pr.right&&cy>=pr.top&&cy<=pr.bottom){
+        nextMarks.push({
+          page:i+1,
+          x:(rc.left-pr.left)/pr.width, y:(rc.top-pr.top)/pr.height,
+          w:rc.width/pr.width, h:rc.height/pr.height,
+          color:currentColor, created:new Date().toISOString(), kind:"pen",
+          gid, text: nextMarks.length===0 ? selText : ""   // texto completo so na 1a linha
+        });
+        break;
+      }
+    }
+  }
+  if(!nextMarks.length) return;
+  sel.removeAllRanges();
+  commitMarks([...marks,...nextMarks]);
+});
+
+/* ---- CAIXA: arrasta retangulo (texto ou imagem). 3 listeners ---- */
+let drawStart=null,drawEl=null,drawIdx=-1;
+viewer.addEventListener("mousedown",e=>{
+  if(!boxActive()) return;
+  const layer=e.target.closest(".mark-layer");
+  if(!layer) return;
+  drawIdx=+layer.dataset.idx;
+  const r=layer.getBoundingClientRect();
+  drawStart={x:e.clientX-r.left,y:e.clientY-r.top};
+  drawEl=document.createElement("div");
+  drawEl.className="mark-rect";
+  drawEl.style.background=rgba(currentColor,0.35);
+  layer.appendChild(drawEl);
+  e.preventDefault();
+});
+viewer.addEventListener("mousemove",e=>{
+  if(!drawStart||!drawEl) return;
+  const r=pageHolders[drawIdx].markLayer.getBoundingClientRect();
+  const x=e.clientX-r.left,y=e.clientY-r.top;
+  const left=Math.min(x,drawStart.x),top=Math.min(y,drawStart.y);
+  drawEl.style.left=left+"px";drawEl.style.top=top+"px";
+  drawEl.style.width=Math.abs(x-drawStart.x)+"px";
+  drawEl.style.height=Math.abs(y-drawStart.y)+"px";
+});
+window.addEventListener("mouseup",e=>{
+  if(!drawStart||!drawEl) return;
+  const r=pageHolders[drawIdx].markLayer.getBoundingClientRect();
+  const x=e.clientX-r.left,y=e.clientY-r.top;
+  const left=Math.min(x,drawStart.x),top=Math.min(y,drawStart.y);
+  const w=Math.abs(x-drawStart.x),h=Math.abs(y-drawStart.y);
+  drawEl.remove();drawEl=null;const idx=drawIdx;drawStart=null;
+  if(w<5||h<5) return; // ignora clique sem arrasto
+  // texto sob a caixa (spans do text layer que cruzam o retangulo)
+  const boxCli={left:r.left+left,top:r.top+top,right:r.left+left+w,bottom:r.top+top+h};
+  const boxText=textInRect(idx,boxCli);
+  commitMarks([...marks,{
+    page:idx+1,
+    x:left/r.width, y:top/r.height,
+    w:w/r.width, h:h/r.height,
+    color:currentColor,
+    created:new Date().toISOString(), kind:"box", text:boxText,
+    gid:"g"+Date.now()+"_"+Math.floor(Math.random()*1e6)
+  }]);
+});
+
+/* DESFAZER ultima marcacao (Ctrl+Z ou botao) */
+function undoMark(){
+  if(!undoStack.length){toast("Nada para desfazer.");return;}
+  redoStack.push(cloneMarksState(marks));
+  marks=undoStack.pop();
+  syncMarksUI();
+}
+function redoMark(){
+  if(!redoStack.length){toast("Nada para refazer.");return;}
+  undoStack.push(cloneMarksState(marks));
+  marks=redoStack.pop();
+  syncMarksUI();
+}
+$("undoBtn").onclick=undoMark;
+
+/* desenha marcacoes salvas sobre a camada da pagina */
+function drawMarksOnLayer(idx){
+  const ph=pageHolders[idx];
+  if(!ph) return;
+  // limpa rects ja desenhados
+  ph.markLayer.querySelectorAll(".mark-rect.saved").forEach(e=>e.remove());
+  ph.markLayer.querySelectorAll(".mark-text.saved").forEach(e=>e.remove());
+  marks.filter(m=>m.page===idx+1).forEach(m=>{
+    if(m.kind==="text"){
+      const d=document.createElement("div");
+      d.className="mark-text saved";
+      d.style.left=(m.x*100)+"%";
+      d.style.top=(m.y*100)+"%";
+      d.style.color=rgba(m.color,0.95);
+      d.style.fontSize=((normalizeFontSize(m.fontSize))*scale/1.2)+"px";
+      d.style.fontWeight=m.fontWeight||"normal";
+      d.style.fontStyle=m.fontStyle||"normal";
+      d.textContent=m.text||"";
+      ph.markLayer.appendChild(d);
+      return;
+    }
+    const d=document.createElement("div");
+    d.className="mark-rect saved";
+    d.style.left=(m.x*100)+"%";
+    d.style.top=(m.y*100)+"%";
+    d.style.width=(m.w*100)+"%";
+    d.style.height=(m.h*100)+"%";
+    d.style.background=rgba(m.color,0.35);
+    ph.markLayer.appendChild(d);
+  });
+}
+
+function rgba(colorKey,a){
+  const c=colorInfo(colorKey);
+  return `rgba(${c.rgb[0]},${c.rgb[1]},${c.rgb[2]},${a})`;
+}
+
+/* texto sob um retangulo (coords de tela) na pagina idx */
+function textInRect(idx,box){
+  const ph=pageHolders[idx];
+  if(!ph) return "";
+  const out=[];
+  ph.textLayer.querySelectorAll("span").forEach(sp=>{
+    const s=sp.getBoundingClientRect();
+    const ix=Math.max(0,Math.min(box.right,s.right)-Math.max(box.left,s.left));
+    const iy=Math.max(0,Math.min(box.bottom,s.bottom)-Math.max(box.top,s.top));
+    // pega o span se >40% dele estiver dentro da caixa
+    if(ix>0 && iy>0 && (ix*iy)/(s.width*s.height||1) > 0.4) out.push(sp.textContent);
+  });
+  return out.join(" ").replace(/\s+/g," ").trim();
+}
+
+/* ============================================================
+   BUSCA NO PDF
+   ============================================================ */
+async function ensureTextIndex(){
+  if(pageTextCache.length===numPages) return;
+  showLoading(true);
+  for(let i=0;i<numPages;i++){
+    if(pageTextCache[i]!=null) continue;
+    try{
+      const tc=await pdfDoc.getPage(i+1).then(p=>p.getTextContent());
+      pageTextCache[i]=tc.items.map(it=>it.str).join(" ");
+    }catch{ pageTextCache[i]=""; }
+  }
+  showLoading(false);
+}
+async function doSearch(q){
+  q=(q||"").trim();
+  searchQuery=q.toLowerCase();
+  clearSearchHighlights();
+  if(!searchQuery){ searchMatches=[]; searchPos=-1; updateSearchCount(); searchBtns(); return; }
+  await ensureTextIndex();
+  searchMatches=[];
+  for(let i=0;i<numPages;i++){
+    const t=(pageTextCache[i]||"").toLowerCase();
+    let k=t.indexOf(searchQuery);
+    let pageHitIndex=0;
+    while(k>=0){
+      searchMatches.push({page:i+1,pageHitIndex});
+      pageHitIndex++;
+      k=t.indexOf(searchQuery,k+searchQuery.length);
+    }
+  }
+  searchPos = searchMatches.length ? 0 : -1;
+  updateSearchCount(); searchBtns();
+  // destaca em todas as paginas ja renderizadas (resto destaca ao rolar)
+  pageHolders.forEach((ph,i)=>{ if(ph.rendered) applySearchHighlight(i); });
+  if(searchPos>=0) gotoMatch(0);
+  else toast("Nenhum resultado para \""+q+"\".");
+}
+function gotoMatch(pos){
+  if(!searchMatches.length) return;
+  searchPos=(pos+searchMatches.length)%searchMatches.length;
+  const m=searchMatches[searchPos];
+  goToPage(m.page);
+  updateSearchCount();
+  // garante render + destaca na pagina
+  setTimeout(()=>{ renderPage(m.page-1); applySearchHighlight(m.page-1); },120);
+}
+function updateSearchCount(){
+  $("searchCount").textContent = searchMatches.length
+    ? (searchPos+1)+"/"+searchMatches.length : "0/0";
+}
+function searchBtns(){
+  const on=searchMatches.length>0;
+  $("searchPrev").disabled=!on; $("searchNext").disabled=!on;
+}
+function applySearchHighlight(idx){
+  const ph=pageHolders[idx];
+  if(!ph||!searchQuery) return;
+  const currentMatch=searchMatches[searchPos];
+  let pageLocalIndex=0;
+  let currentSpan=null;
+  ph.textLayer.querySelectorAll("span").forEach(sp=>{
+    const isHit=sp.textContent.toLowerCase().includes(searchQuery);
+    sp.classList.toggle("search-hit", isHit);
+    sp.classList.remove("search-current");
+    if(isHit){
+      if(currentMatch && currentMatch.page===idx+1 && pageLocalIndex===currentMatch.pageHitIndex){
+        sp.classList.add("search-current");
+        currentSpan=sp;
+      }
+      pageLocalIndex++;
+    }
+  });
+  if(currentSpan){ currentSpan.scrollIntoView({block:"center",inline:"nearest"}); }
+}
+function clearSearchHighlights(){
+  document.querySelectorAll(".text-layer span.search-hit,.text-layer span.search-current")
+    .forEach(sp=>sp.classList.remove("search-hit","search-current"));
+}
+$("searchInput").addEventListener("keydown",e=>{
+  if(e.key!=="Enter") return;
+  e.preventDefault();
+  const v=e.target.value;
+  if(v.trim().toLowerCase()!==searchQuery) doSearch(v);
+  else gotoMatch(searchPos+1);   // Enter de novo = proximo
+});
+$("searchNext").onclick=()=>gotoMatch(searchPos+1);
+$("searchPrev").onclick=()=>gotoMatch(searchPos-1);
+
+/* ============================================================
+   IR PARA PAGINA (digitar)
+   ============================================================ */
+function gotoFromInput(){
+  const n=parseInt($("gotoInput").value,10);
+  if(!n) return;
+  goToPage(n);
+  $("gotoInput").value="";
+}
+$("gotoInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();gotoFromInput();} });
+$("gotoInput").addEventListener("change",gotoFromInput);
+
+/* ============================================================
+   LOCALSTORAGE
+   ============================================================ */
+function saveMarks(){ if(storageKey) localStorage.setItem(storageKey,JSON.stringify(marks)); }
+function loadMarks(){
+  if(!storageKey) return [];
+  try{return JSON.parse(localStorage.getItem(storageKey))||[];}catch{return [];}
+}
+
+function buildMarkedFileBaseName(){
+  return fileName.replace(/\.pdf$/i,"") || "documento";
+}
+
+function buildTimestampedPdfName(){
+  const now=new Date();
+  const pad=n=>String(n).padStart(2,"0");
+  const stamp=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+  return `${buildMarkedFileBaseName()}_${stamp}.pdf`;
+}
+
+async function buildMarkedPdfBytes(){
+  const {PDFDocument,rgb,StandardFonts}=PDFLib;
+  const doc=await PDFDocument.load(rawBytes);
+  const pages=doc.getPages();
+  const fonts={
+    normal:await doc.embedFont(StandardFonts.Helvetica),
+    bold:await doc.embedFont(StandardFonts.HelveticaBold),
+    italic:await doc.embedFont(StandardFonts.HelveticaOblique),
+    boldItalic:await doc.embedFont(StandardFonts.HelveticaBoldOblique)
+  };
+  marks.forEach(m=>{
+    const pg=pages[m.page-1];
+    if(!pg) return;
+    const {width,height}=pg.getSize();
+    const c=colorInfo(m.color);
+    if(m.kind==="text"){
+      const fontKey=(m.fontWeight==="bold" ? "bold" : "") + (m.fontStyle==="italic" ? "Italic" : "") || "normal";
+      const font=fonts[fontKey]||fonts.normal;
+      const size=normalizeFontSize(m.fontSize);
+      pg.drawText(m.text||"",{
+        x:m.x*width,
+        y:height-(m.y*height)-size,
+        size,
+        font,
+        color:rgb(c.rgb[0]/255,c.rgb[1]/255,c.rgb[2]/255),
+        lineHeight:size*1.25,
+        maxWidth:width*0.65
+      });
+      return;
+    }
+    const x=m.x*width;
+    const w=m.w*width;
+    const h=m.h*height;
+    const y=height-(m.y*height)-h;
+    pg.drawRectangle({
+      x,y,width:w,height:h,
+      color:rgb(c.rgb[0]/255,c.rgb[1]/255,c.rgb[2]/255),
+      opacity:0.35
+    });
+  });
+  return await doc.save();
+}
+
+async function savePdfBytesWithPicker(bytes,suggestedName){
+  if(!window.showSaveFilePicker) return false;
+  const handle=await window.showSaveFilePicker({
+    suggestedName,
+    types:[{description:"PDF",accept:{"application/pdf":[".pdf"]}}]
+  });
+  const writable=await handle.createWritable();
+  await writable.write(new Blob([bytes],{type:"application/pdf"}));
+  await writable.close();
+  return true;
+}
+
+function canUseSavePicker(){
+  return typeof window.showSaveFilePicker==="function";
+}
+
+function triggerPdfDownload(bytes,downloadName){
+  const blob=new Blob([bytes],{type:"application/pdf"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=downloadName;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+/* ============================================================
+   PAINEL DE MARCACOES
+   ============================================================ */
+$("marksBtn").onclick=()=>$("marksPanel").classList.toggle("open");
+$("closeMarks").onclick=()=>$("marksPanel").classList.remove("open");
+
+function renderMarksPanel(){
+  const list=$("marksList");
+  list.innerHTML="";
+  if(!marks.length){
+    list.innerHTML='<div class="empty-marks">Nenhuma marcação ainda.<br>Ative <b>Marcar</b> e selecione uma área.</div>';
+    return;
+  }
+  // agrupa por gid (marcacao = grupo de rects); legado sem gid = individual
+  const groups=[];
+  const byGid={};
+  marks.forEach(m=>{
+    const key=m.gid||("solo:"+marks.indexOf(m));
+    if(!byGid[key]){ byGid[key]={key,page:m.page,color:m.color,created:m.created,text:m.text||"",kind:m.kind}; groups.push(byGid[key]); }
+    else if(!byGid[key].text && m.text) byGid[key].text=m.text;
+  });
+  groups.sort((a,b)=>a.page-b.page);
+  const esc=s=>s.replace(/[&<>]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[ch]));
+  groups.forEach(g=>{
+    const c=colorInfo(g.color);
+    const item=document.createElement("div");
+    item.className="mark-item";
+    const date=new Date(g.created).toLocaleString();
+    const txt=g.text ? `<div class="txt">&ldquo;${esc(g.text.slice(0,180))}${g.text.length>180?"…":""}&rdquo;</div>` : "";
+    const tipo=g.kind==="box"?"Caixa":(g.kind==="text"?"Texto":"Caneta");
+    item.innerHTML=`
+      <div class="row">
+        <span class="dot" style="background:rgb(${c.rgb.join(",")})"></span>
+        <b>Página ${g.page}</b>
+      </div>
+      ${txt}
+      <div class="meta">${tipo} · ${c.name}<br>${date}</div>
+      <div class="acts">
+        <button class="go">Ir para página</button>
+        <button class="del">Excluir</button>
+      </div>`;
+    item.querySelector(".go").onclick=()=>goToPage(g.page);
+    if(g.kind==="text"){
+      const acts=item.querySelector(".acts");
+      const editBtn=document.createElement("button");
+      editBtn.className="edit";
+      editBtn.textContent="Editar";
+      editBtn.onclick=()=>loadTextMarkForEditing(g.key);
+      acts.insertBefore(editBtn, acts.querySelector(".del"));
+    }
+    item.querySelector(".del").onclick=()=>{
+      const pages=new Set();
+      commitMarks(marks.filter(m=>{
+        const same = g.key.startsWith("solo:") ? (marks.indexOf(m)===+g.key.slice(5)) : m.gid===g.key;
+        return !same;
+      }));
+    };
+    list.appendChild(item);
+  });
+}
+
+/* ============================================================
+   REMOVER TODAS MARCACOES (so local — nao altera PDF original)
+   ============================================================ */
+$("clearMarks").onclick=()=>{
+  if(!marks.length) return;
+  if(!confirm("Remover todas as marcações deste PDF? O arquivo original não é alterado.")) return;
+  commitMarks([]);
+};
+
+/* ============================================================
+   COPIAR PRINT DA PAGINA ATUAL (canvas -> clipboard PNG)
+   inclui dark filter do preset + marcacoes
+   ============================================================ */
+$("copyPage").onclick=async()=>{
+  const idx=getPrimaryVisiblePage()-1;
+  const pageNo=idx+1;
+  const ph=pageHolders[idx];
+  if(!ph){toast("Abra um PDF primeiro.");return;}
+  showLoading(true);
+  try{
+    // renderiza a PAGINA INTEIRA em alta resolucao (independe do zoom da tela)
+    const base=ph.page.getViewport({scale:1});
+    const s=Math.min(3,Math.max(1.6,1600/base.width));
+    const vp=ph.page.getViewport({scale:s});
+    const src=document.createElement("canvas");
+    src.width=Math.round(vp.width); src.height=Math.round(vp.height);
+    await ph.page.render({canvasContext:src.getContext("2d"),viewport:vp}).promise;
+    const out=document.createElement("canvas");
+    out.width=src.width; out.height=src.height;
+    const ctx=out.getContext("2d");
+    // aplica mesmo filtro dark do preset
+    ctx.filter=PRESETS[$("preset").value].pageFilter;
+    ctx.drawImage(src,0,0);
+    // marcacoes por cima (sem filtro)
+    ctx.filter="none";
+    marks.filter(m=>m.page===pageNo).forEach(m=>{
+      const c=colorInfo(m.color);
+      if(m.kind==="text"){
+        const size=normalizeFontSize(m.fontSize)*s;
+        ctx.fillStyle=`rgba(${c.rgb[0]},${c.rgb[1]},${c.rgb[2]},0.95)`;
+        ctx.font=`${m.fontStyle==="italic"?"italic ":""}${m.fontWeight==="bold"?"bold ":""}${size}px Segoe UI`;
+        const lines=String(m.text||"").split(/\n/);
+        lines.forEach((line,i)=>ctx.fillText(line,m.x*out.width,m.y*out.height+size*(i+1)));
+        return;
+      }
+      ctx.fillStyle=`rgba(${c.rgb[0]},${c.rgb[1]},${c.rgb[2]},0.35)`;
+      ctx.fillRect(m.x*out.width,m.y*out.height,m.w*out.width,m.h*out.height);
+    });
+    const blob=await new Promise(r=>out.toBlob(r,"image/png"));
+    await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);
+    toast("Print da página "+pageNo+" copiado!");
+  }catch(err){
+    console.error(err);
+    toast("Erro ao copiar print: "+(err.message||err));
+  }finally{
+    showLoading(false);
+  }
+};
+
+/* ============================================================
+   EXPORTAR PDF MARCADO (PDF-lib)
+   converte coords relativas -> coords reais da pagina PDF
+   ============================================================ */
+$('savePdfAs').onclick=async()=>{
+  if(!rawBytes){toast("Abra um PDF primeiro.");return;}
+  if(!canUseSavePicker()){
+    toast("Salvar como precisa do File System Access API. Abra pelo servidor local (ex.: http://localhost:5500) para escolher pasta e substituir arquivo.");
+    return;
+  }
+  showLoading(true);
+  try{
+    const bytes=await buildMarkedPdfBytes();
+    const saved=await savePdfBytesWithPicker(bytes,fileName||"documento.pdf");
+    if(saved) toast("PDF salvo no local escolhido.");
+  }catch(err){
+    if(err && err.name==="AbortError") return;
+    console.error(err);
+    toast("Erro ao salvar PDF: "+(err.message||err));
+  }finally{
+    showLoading(false);
+  }
+};
+
+$("downloadPdf").onclick=async()=>{
+  if(!rawBytes){toast("Abra um PDF primeiro.");return;}
+  showLoading(true);
+  try{
+    const bytes=await buildMarkedPdfBytes();
+    const name=buildTimestampedPdfName();
+    triggerPdfDownload(bytes,name);
+    toast("Download iniciado: "+name);
+  }catch(err){
+    console.error(err);
+    toast("Erro no download do PDF: "+(err.message||err));
+  }finally{
+    showLoading(false);
+  }
+};
+
+/* ============================================================
+   UI helpers
+   ============================================================ */
+function enableUI(on){
+  ["zoomIn","zoomOut","fitWidth","fitPage","searchInput","gotoInput","markPen","markBox","markText","undoBtn","marksBtn","copyPage","savePdfAs","downloadPdf","clearMarks"]
+    .forEach(id=>$(id).disabled=!on);
+}
+function showLoading(on){ $("loadingMsg").classList.toggle("hidden",!on); }
+function toast(msg){
+  const t=document.createElement("div");
+  t.className="toast";t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),4500);
+}
+
+/* ============================================================
+   ATALHOS DE TECLADO
+   ============================================================ */
+window.addEventListener("keydown",e=>{
+  if(!pdfDoc) return;
+  if(e.ctrlKey && (e.key==="z"||e.key==="Z")){e.preventDefault();undoMark();}
+  else if(e.ctrlKey && (e.key==="y"||e.key==="Y")){e.preventDefault();redoMark();}
+  else if(e.ctrlKey && (e.key==="+"||e.key==="=")){e.preventDefault();setZoom(scale+0.2);}
+  else if(e.ctrlKey && e.key==="-"){e.preventDefault();setZoom(scale-0.2);}
+  else if(e.key==="ArrowDown"){ e.preventDefault(); goToPage(currentPage+1); }
+  else if(e.key==="ArrowUp"){ e.preventDefault(); goToPage(currentPage-1); }
+});
+</script>
+</body>
+</html>
