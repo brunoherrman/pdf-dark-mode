@@ -119,10 +119,6 @@ http://localhost:5500
 - `.gitignore`: public-repo exclusions
 - `LICENSE`: project license
 
-## Recommended GitHub Description
-
-Dark-mode PDF reader with highlights, comments, search, zoom, print copy, and annotated PDF export — fully client-side.
-
 ## License
 
 MIT
